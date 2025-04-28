@@ -8,7 +8,6 @@ use crossterm::{
 use serde::Serialize;
 use std::io::{stdout, Write};
 use std::time::{Duration, Instant};
-use tokio::signal;
 
 #[derive(Serialize)]
 pub struct SessionStats {
@@ -28,24 +27,16 @@ pub async fn start_typing_session(words: Vec<String>) -> SessionStats {
     queue!(stdout, Hide).unwrap();
     stdout.flush().unwrap();
 
-    // Spawn Ctrl+C background handler
-    let ctrl_c_handler = tokio::spawn(async {
-        signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
-        disable_raw_mode().unwrap();
-        println!("\n❌ Interrupted by Ctrl+C. Exiting...");
-        std::process::exit(0);
-    });
-
     let mut typed = 0;
     let mut correct = 0;
     let mut word_buffer = String::new();
 
     let target_lines: Vec<Vec<String>> = words
-        .chunks(10)
+        .chunks(5)
         .map(|chunk| chunk.to_vec())
         .collect();
 
-    let mut typed_lines: Vec<Vec<Option<(String, bool, String)>>> = vec![vec![None; 10]];
+    let mut typed_lines: Vec<Vec<Option<(String, bool, String)>>> = vec![vec![None; 5]];
     let mut current_line = 0;
     let mut current_word_index = 0;
 
@@ -54,7 +45,9 @@ pub async fn start_typing_session(words: Vec<String>) -> SessionStats {
 
     loop {
         let elapsed = start_time.map_or(Duration::ZERO, |s| s.elapsed());
-        if elapsed >= time_limit {
+        let time_up = elapsed >= time_limit;
+
+        if time_up && word_buffer.is_empty() {
             break;
         }
 
@@ -137,12 +130,16 @@ pub async fn start_typing_session(words: Vec<String>) -> SessionStats {
                             word_buffer.clear();
                             current_word_index += 1;
 
-                            if current_word_index == 10 {
+                            if current_word_index == 5 {
                                 current_line += 1;
                                 current_word_index = 0;
                                 if current_line < target_lines.len() {
-                                    typed_lines.push(vec![None; 10]);
+                                    typed_lines.push(vec![None; 5]);
                                 }
+                            }
+
+                            if time_up {
+                                break;
                             }
                         }
                     }
@@ -160,9 +157,8 @@ pub async fn start_typing_session(words: Vec<String>) -> SessionStats {
     }
 
     disable_raw_mode().unwrap();
-    queue!(stdout, Show).unwrap();
+    queue!(stdout, cursor::MoveTo(0, current_line as u16 + 2), Clear(ClearType::FromCursorDown), Show).unwrap();
     stdout.flush().unwrap();
-    ctrl_c_handler.abort();
 
     let total_secs = start_time.map_or(0.0, |s| s.elapsed().as_secs_f64());
     let accuracy = if typed == 0 { 0.0 } else { (correct as f64 / typed as f64) * 100.0 };

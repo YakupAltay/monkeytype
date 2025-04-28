@@ -30,6 +30,7 @@ pub async fn run(da_layers: Vec<DALayer>) {
     let words = api::fetch_words(50).await.expect("Failed to fetch words");
     let stats = game::start_typing_session(words).await;
 
+    tokio::time::sleep(Duration::from_millis(1500)).await;
     println!("\n\n--- Session Ended ---");
 
     for layer in da_layers {
