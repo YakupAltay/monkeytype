@@ -1,0 +1,18 @@
+services:
+    avail-light-node:
+        build:
+            context: .
+            args:
+                UBUNTU_VERSION: 22.04
+                APP_ID: 0
+                CHAIN_ID: turing
+                DAEMON_HOME: /root/.avail
+                DAEMON_NAME: avail-light
+                DAEMON_VERSION: avail-light-client-v1.12.11
+                DEFAULT_RPC_PORT: 10102
+                SYNC_START_BLOCK: 1693700
+        platform: linux/amd64
+        container_name: avail-light-node
+        restart: always
+        ports:
+        - 10102:10102

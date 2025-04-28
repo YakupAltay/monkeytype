@@ -5,6 +5,6 @@ pub async fn fetch_words(count: usize) -> Result<Vec<String>, Error> {
     let words: Vec<String> = reqwest::get(&url).await?.json().await?;
     Ok(words
         .into_iter()
-        .filter(|w| w.len() > 3 && w.len() < 10) // filter out too short/long words
+        .filter(|w| w.len() > 3 && w.len() < 8)
         .collect())
 }

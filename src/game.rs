@@ -8,6 +8,7 @@ use crossterm::{
 use serde::Serialize;
 use std::io::{stdout, Write};
 use std::time::{Duration, Instant};
+use tokio::signal;
 
 #[derive(Serialize)]
 pub struct SessionStats {
@@ -25,6 +26,15 @@ pub async fn start_typing_session(words: Vec<String>) -> SessionStats {
     let mut stdout = stdout();
     enable_raw_mode().unwrap();
     queue!(stdout, Hide).unwrap();
+    stdout.flush().unwrap();
+
+    // Spawn Ctrl+C background handler
+    let ctrl_c_handler = tokio::spawn(async {
+        signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
+        disable_raw_mode().unwrap();
+        println!("\n❌ Interrupted by Ctrl+C. Exiting...");
+        std::process::exit(0);
+    });
 
     let mut typed = 0;
     let mut correct = 0;
@@ -151,32 +161,17 @@ pub async fn start_typing_session(words: Vec<String>) -> SessionStats {
 
     disable_raw_mode().unwrap();
     queue!(stdout, Show).unwrap();
-
-    if !word_buffer.is_empty()
-        && current_line < target_lines.len()
-        && current_word_index < 10
-    {
-        let expected = &target_lines[current_line][current_word_index];
-        let is_correct = word_buffer == *expected;
-        typed += 1;
-        if is_correct {
-            correct += 1;
-        }
-        typed_lines[current_line][current_word_index] =
-            Some((word_buffer.clone(), is_correct, expected.clone()));
-    }
+    stdout.flush().unwrap();
+    ctrl_c_handler.abort();
 
     let total_secs = start_time.map_or(0.0, |s| s.elapsed().as_secs_f64());
     let accuracy = if typed == 0 { 0.0 } else { (correct as f64 / typed as f64) * 100.0 };
     let wpm = (correct as f64 / total_secs) * 60.0;
 
-    let stats = SessionStats {
+    SessionStats {
         typed,
         correct,
         accuracy,
         wpm,
-    };
-
-    println!("\n\n--- Session Ended ---\n{}", serde_json::to_string_pretty(&stats).unwrap());
-    stats
+    }
 }
